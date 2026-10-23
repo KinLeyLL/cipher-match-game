@@ -12,6 +12,7 @@ import {
   QrCode,
   Radio,
   Sparkles,
+  Trash2,
   Upload,
   Users,
 } from 'lucide-react'
@@ -45,7 +46,7 @@ type Group = {
 type PlayerState = { player: Player; group: Group | null }
 type PlayerSession = { playerId: string; accessToken: string }
 type HostGroup = Pick<Group, 'id' | 'group_name' | 'team_pin' | 'member_count' | 'is_completed' | 'is_flex_completed' | 'phase2_complete'>
-type UploadedPhoto = { url: string; fileName: string; sizeBytes: number }
+type UploadedPhoto = { url: string; path: string; fileName: string; sizeBytes: number }
 type GameStatus = 'waiting' | 'active' | 'complete'
 
 const SESSION_KEY = 'cipher-match-player-session'
@@ -157,6 +158,7 @@ export default function App() {
   const [photoUploadBusy, setPhotoUploadBusy] = useState(false)
   const [photoUploadProgress, setPhotoUploadProgress] = useState('')
   const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([])
+  const [photoRemovingPath, setPhotoRemovingPath] = useState('')
   const [lobbyCount, setLobbyCount] = useState(0)
   const [hostGroups, setHostGroups] = useState<HostGroup[]>([])
   const [flexTarget, setFlexTarget] = useState<HostGroup | null>(null)
@@ -396,7 +398,7 @@ export default function App() {
         if (error) throw error
         const url = supabase.storage.from('puzzle-images').getPublicUrl(filePath).data.publicUrl
         uploadedUrls.push(url)
-        setUploadedPhotos((current) => [...current, { url, fileName: file.name, sizeBytes: compressed.size }])
+        setUploadedPhotos((current) => [...current, { url, path: filePath, fileName: file.name, sizeBytes: compressed.size }])
         setImageUrls((current) => {
           const customUrls = current.split('\n').map((value) => value.trim()).filter((value) => value && !DEFAULT_IMAGE_URLS.includes(value))
           return [...new Set([...customUrls, url])].join('\n')
@@ -413,6 +415,24 @@ export default function App() {
     } finally {
       setPhotoUploadBusy(false)
       setPhotoUploadProgress('')
+    }
+  }
+
+  const handleRemovePhoto = async (photo: UploadedPhoto) => {
+    if (!supabase || photoRemovingPath) return
+    setPhotoRemovingPath(photo.path)
+    setHostError('')
+    setHostNotice('')
+    try {
+      const { error } = await supabase.storage.from('puzzle-images').remove([photo.path])
+      if (error) throw error
+      setUploadedPhotos((current) => current.filter((item) => item.path !== photo.path))
+      setImageUrls((current) => current.split('\n').filter((url) => url.trim() !== photo.url).join('\n'))
+      setHostNotice(`${photo.fileName} was deleted and removed from the game photos.`)
+    } catch (error) {
+      setHostError(error instanceof Error ? error.message : 'Could not delete this photo.')
+    } finally {
+      setPhotoRemovingPath('')
     }
   }
 
@@ -647,7 +667,7 @@ export default function App() {
                     <p className="section-description">Players are balanced into teams of three to five. Each team gets a matching four-piece photo.</p>
                     {gameStatus === 'waiting' && <>
                       <label htmlFor="photo-files">Upload master photos <span>compressed under 280 KB</span></label>
-                      <input className="photo-file-input" id="photo-files" type="file" accept="image/*" multiple disabled={photoUploadBusy} onChange={handlePhotoUpload} />
+                      <input className="photo-file-input" id="photo-files" type="file" accept="image/*" multiple disabled={photoUploadBusy || Boolean(photoRemovingPath)} onChange={handlePhotoUpload} />
                       {photoUploadProgress && <p className="upload-progress" role="status"><Upload size={13} />{photoUploadProgress}</p>}
                       {uploadedPhotos.length > 0 && (
                         <div className="uploaded-photo-list" aria-label="Successfully uploaded photos">
@@ -657,6 +677,9 @@ export default function App() {
                               <img src={photo.url} alt="" />
                               <span><b>{photo.fileName}</b><small>{Math.ceil(photo.sizeBytes / 1024)} KB · ready to use</small></span>
                               <CheckCircle2 size={17} aria-label="Upload complete" />
+                              <button className="photo-remove-button" type="button" title={`Delete ${photo.fileName}`} aria-label={`Delete ${photo.fileName}`} disabled={photoUploadBusy || Boolean(photoRemovingPath)} onClick={() => void handleRemovePhoto(photo)}>
+                                {photoRemovingPath === photo.path ? <span className="loader photo-remove-loader" aria-label="Deleting photo" /> : <Trash2 size={15} />}
+                              </button>
                             </div>
                           ))}
                         </div>
@@ -670,7 +693,7 @@ export default function App() {
                     </>}
                     {hostError && <p className="inline-error" role="alert">{hostError}</p>}
                     {hostNotice && <p className="inline-success"><CheckCircle2 size={16} />{hostNotice}</p>}
-                    <button className="button button-launch button-wide" disabled={hostBusy || photoUploadBusy || gameStatus !== 'waiting' || lobbyCount < 3 || !photosReady} onClick={() => void handleStartGame()}>
+                    <button className="button button-launch button-wide" disabled={hostBusy || photoUploadBusy || Boolean(photoRemovingPath) || gameStatus !== 'waiting' || lobbyCount < 3 || !photosReady} onClick={() => void handleStartGame()}>
                       {photoUploadBusy ? 'Uploading photos…' : hostBusy ? 'Starting…' : gameStatus === 'waiting' ? <>Start puzzle match <ArrowRight size={17} /></> : <>Game in progress <Radio size={17} /></>}
                     </button>
                     {lobbyCount < 3 && gameStatus === 'waiting' && <p className="fine-print">At least 3 players are needed to start.</p>}

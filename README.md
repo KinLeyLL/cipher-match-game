@@ -23,14 +23,14 @@ The app accepts up to 90 players. The start function balances teams into groups 
 
 1. Open **Host** and sign in. The account must be in `public.event_hosts`.
 2. Show the QR code to guests. The player count rises as they join.
-3. Upload one unique photo per team, or keep the supplied sample photos. Each uploaded file appears below the picker with its compressed size and a ready check. The photo counter tells you how many teams can be started.
+3. Upload one unique photo per team, or keep the supplied sample photos. Each uploaded file appears below the picker with its compressed size and a ready check. Use its trash button to remove it from both Storage and the game photo list. The photo counter tells you how many teams can be started.
 4. When there are at least three players and enough photos, press **Start puzzle match** once. The game assigns teams and sends each player's tile.
 5. Watch **Team status**. Captains share the PIN shown to their team; if a team is stalled by a missing guest, use **Flex complete** for that team.
 
 ## Supabase setup notes
 
 - Enable Email/Password under Authentication providers before creating a host account.
-- `schema.sql` enables row-level security, host-only roster access, player RPCs, authenticated host-only game start and flex-completion, a public 300 KB-limited `puzzle-images` bucket with host-only uploads, and Realtime publication for live updates.
+- `schema.sql` enables row-level security, host-only roster access, player RPCs, authenticated host-only game start and flex-completion, a public 300 KB-limited `puzzle-images` bucket with host-only uploads and deletes, and Realtime publication for live updates.
 - Upload photos in the host dashboard to resize them and compress them below 280 KB before distribution. HTTPS URLs are also supported; use an image CDN that can serve optimized images.
 - The host dashboard lists each team's PIN and offers a confirmed **Flex complete** action to advance a team if someone is missing or can't check in. It preserves a checked-in captain or promotes a checked-in teammate if the original captain is absent.
 - Do not commit `.env.local`. The browser anon key is expected to be public; the SQL policies and RPCs enforce the permitted operations.

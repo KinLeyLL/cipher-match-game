@@ -141,6 +141,13 @@ create policy "event hosts upload puzzle photos" on storage.objects
     and exists (select 1 from public.event_hosts where user_id = auth.uid())
   );
 
+drop policy if exists "event hosts delete puzzle photos" on storage.objects;
+create policy "event hosts delete puzzle photos" on storage.objects
+  for delete to authenticated using (
+    bucket_id = 'puzzle-images'
+    and exists (select 1 from public.event_hosts where user_id = auth.uid())
+  );
+
 create or replace function public.publish_player_update()
 returns trigger
 language plpgsql
