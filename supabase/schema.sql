@@ -23,6 +23,7 @@ create table if not exists public.groups (
 );
 
 alter table public.groups drop column if exists team_code;
+alter table public.groups drop column if exists pin_code;
 alter table public.groups add column if not exists team_pin text;
 alter table public.groups add column if not exists member_count integer;
 alter table public.groups add column if not exists is_completed boolean;
