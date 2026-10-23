@@ -45,6 +45,7 @@ type Group = {
 type PlayerState = { player: Player; group: Group | null }
 type PlayerSession = { playerId: string; accessToken: string }
 type HostGroup = Pick<Group, 'id' | 'group_name' | 'team_pin' | 'member_count' | 'is_completed' | 'is_flex_completed' | 'phase2_complete'>
+type UploadedPhoto = { url: string; fileName: string; sizeBytes: number }
 type GameStatus = 'waiting' | 'active' | 'complete'
 
 const SESSION_KEY = 'cipher-match-player-session'
@@ -155,6 +156,7 @@ export default function App() {
   const [hostBusy, setHostBusy] = useState(false)
   const [photoUploadBusy, setPhotoUploadBusy] = useState(false)
   const [photoUploadProgress, setPhotoUploadProgress] = useState('')
+  const [uploadedPhotos, setUploadedPhotos] = useState<UploadedPhoto[]>([])
   const [lobbyCount, setLobbyCount] = useState(0)
   const [hostGroups, setHostGroups] = useState<HostGroup[]>([])
   const [flexTarget, setFlexTarget] = useState<HostGroup | null>(null)
@@ -166,6 +168,9 @@ export default function App() {
   const [joinUrl] = useState(() => `${window.location.origin}${window.location.pathname}`)
   const hostAuthorized = Boolean(hostUserId && hostUserId === hostVerifiedUserId && hostAccess === 'allowed')
   const checkingHostAccess = Boolean(hostUserId && hostUserId !== hostVerifiedUserId)
+  const uniqueImageUrls = [...new Set(imageUrls.split('\n').map((url) => url.trim()).filter((url) => /^https:\/\//i.test(url)))]
+  const requiredPhotoCount = Math.max(1, Math.round(lobbyCount / 4))
+  const photosReady = uniqueImageUrls.length >= requiredPhotoCount
 
   const refreshPlayerState = async (session: PlayerSession) => {
     if (!supabase) return
@@ -375,6 +380,7 @@ export default function App() {
 
     setPhotoUploadBusy(true)
     setHostError('')
+    setHostNotice('')
     const uploadedUrls: string[] = []
     try {
       for (const [index, file] of files.entries()) {
@@ -388,16 +394,22 @@ export default function App() {
           upsert: false,
         })
         if (error) throw error
-        uploadedUrls.push(supabase.storage.from('puzzle-images').getPublicUrl(filePath).data.publicUrl)
+        const url = supabase.storage.from('puzzle-images').getPublicUrl(filePath).data.publicUrl
+        uploadedUrls.push(url)
+        setUploadedPhotos((current) => [...current, { url, fileName: file.name, sizeBytes: compressed.size }])
+        setImageUrls((current) => {
+          const customUrls = current.split('\n').map((value) => value.trim()).filter((value) => value && !DEFAULT_IMAGE_URLS.includes(value))
+          return [...new Set([...customUrls, url])].join('\n')
+        })
+        setHostNotice(`Uploaded ${uploadedUrls.length} of ${files.length} selected photo${files.length === 1 ? '' : 's'}.`)
       }
 
-      setImageUrls((current) => {
-        const customUrls = current.split('\n').map((url) => url.trim()).filter((url) => url && !DEFAULT_IMAGE_URLS.includes(url))
-        return [...new Set([...customUrls, ...uploadedUrls])].join('\n')
-      })
-      setHostNotice(`Added ${uploadedUrls.length} compressed photo${uploadedUrls.length === 1 ? '' : 's'}; each is under 280 KB.`)
+      setHostNotice(`${uploadedUrls.length} photo${uploadedUrls.length === 1 ? '' : 's'} uploaded and ready. Each is under 280 KB.`)
     } catch (error) {
       setHostError(error instanceof Error ? error.message : 'Photo upload failed.')
+      if (uploadedUrls.length > 0) {
+        setHostNotice(`${uploadedUrls.length} photo${uploadedUrls.length === 1 ? '' : 's'} uploaded successfully; another selected photo failed.`)
+      }
     } finally {
       setPhotoUploadBusy(false)
       setPhotoUploadProgress('')
@@ -406,20 +418,14 @@ export default function App() {
 
   const handleStartGame = async () => {
     if (!supabase) return
-    const images = imageUrls
-      .split('\n')
-      .map((url) => url.trim())
-      .filter((url) => /^https:\/\//i.test(url))
-    const uniqueImages = [...new Set(images)]
-    const requiredImages = Math.max(1, Math.round(lobbyCount / 4))
-    if (uniqueImages.length < requiredImages) {
-      setHostError(`Add ${requiredImages} unique HTTPS photos so every team has its own puzzle image.`)
+    if (uniqueImageUrls.length < requiredPhotoCount) {
+      setHostError(`Add ${requiredPhotoCount} unique HTTPS photos so every team has its own puzzle image.`)
       return
     }
     setHostBusy(true)
     setHostError('')
     setHostNotice('Assigning players to teams…')
-    const { error } = await supabase.rpc('start_game', { p_image_urls: images })
+    const { error } = await supabase.rpc('start_game', { p_image_urls: uniqueImageUrls })
     if (error) {
       setHostError(error.message)
       setHostNotice('')
@@ -643,12 +649,28 @@ export default function App() {
                       <label htmlFor="photo-files">Upload master photos <span>compressed under 280 KB</span></label>
                       <input className="photo-file-input" id="photo-files" type="file" accept="image/*" multiple disabled={photoUploadBusy} onChange={handlePhotoUpload} />
                       {photoUploadProgress && <p className="upload-progress" role="status"><Upload size={13} />{photoUploadProgress}</p>}
-                      <label htmlFor="image-urls">Or add pre-optimized HTTPS URLs <span>under 280 KB each · {Math.max(1, Math.round(lobbyCount / 4))} needed</span></label>
+                      {uploadedPhotos.length > 0 && (
+                        <div className="uploaded-photo-list" aria-label="Successfully uploaded photos">
+                          <p>UPLOADED PHOTOS</p>
+                          {uploadedPhotos.map((photo) => (
+                            <div className="uploaded-photo" key={photo.url}>
+                              <img src={photo.url} alt="" />
+                              <span><b>{photo.fileName}</b><small>{Math.ceil(photo.sizeBytes / 1024)} KB · ready to use</small></span>
+                              <CheckCircle2 size={17} aria-label="Upload complete" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <label htmlFor="image-urls">Or add pre-optimized HTTPS URLs <span>{uniqueImageUrls.length} available · {requiredPhotoCount} needed</span></label>
                       <textarea id="image-urls" rows={4} value={imageUrls} onChange={(event) => setImageUrls(event.target.value)} />
+                      <div className={photosReady ? 'photo-readiness ready' : 'photo-readiness needs-photos'} role="status">
+                        {photosReady ? <CheckCircle2 size={17} /> : <CircleHelp size={17} />}
+                        <span><b>{photosReady ? `${uniqueImageUrls.length} photos available` : `${uniqueImageUrls.length} of ${requiredPhotoCount} photos ready`}</b><small>{photosReady ? `Enough for ${requiredPhotoCount} teams.` : `Add ${requiredPhotoCount - uniqueImageUrls.length} more unique photo${requiredPhotoCount - uniqueImageUrls.length === 1 ? '' : 's'} before starting.`}</small></span>
+                      </div>
                     </>}
                     {hostError && <p className="inline-error" role="alert">{hostError}</p>}
                     {hostNotice && <p className="inline-success"><CheckCircle2 size={16} />{hostNotice}</p>}
-                    <button className="button button-launch button-wide" disabled={hostBusy || photoUploadBusy || gameStatus !== 'waiting' || lobbyCount < 3} onClick={() => void handleStartGame()}>
+                    <button className="button button-launch button-wide" disabled={hostBusy || photoUploadBusy || gameStatus !== 'waiting' || lobbyCount < 3 || !photosReady} onClick={() => void handleStartGame()}>
                       {photoUploadBusy ? 'Uploading photos…' : hostBusy ? 'Starting…' : gameStatus === 'waiting' ? <>Start puzzle match <ArrowRight size={17} /></> : <>Game in progress <Radio size={17} /></>}
                     </button>
                     {lobbyCount < 3 && gameStatus === 'waiting' && <p className="fine-print">At least 3 players are needed to start.</p>}

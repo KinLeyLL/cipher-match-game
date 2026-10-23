@@ -19,6 +19,14 @@ A realtime team puzzle hunt for company events. Guests join a shared lobby, rece
 
 The app accepts up to 90 players. The start function balances teams into groups of three to five, assigns each a photo and a 2x2 tile, and advances the event only after every player on a team checks in. Each group has one trivia captain so concurrent taps cannot skip questions. Captains share a four-digit team PIN; teammates enter it on their own screens.
 
+## Host event flow
+
+1. Open **Host** and sign in. The account must be in `public.event_hosts`.
+2. Show the QR code to guests. The player count rises as they join.
+3. Upload one unique photo per team, or keep the supplied sample photos. Each uploaded file appears below the picker with its compressed size and a ready check. The photo counter tells you how many teams can be started.
+4. When there are at least three players and enough photos, press **Start puzzle match** once. The game assigns teams and sends each player's tile.
+5. Watch **Team status**. Captains share the PIN shown to their team; if a team is stalled by a missing guest, use **Flex complete** for that team.
+
 ## Supabase setup notes
 
 - Enable Email/Password under Authentication providers before creating a host account.

@@ -157,6 +157,20 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px
 .photo-file-input { display: block; width: 100%; margin: 0 0 13px; padding: 8px; border: 1px solid rgba(230, 238, 226, .18); background: #111713; color: #aeb8ad; font-size: 10px; }
 .photo-file-input::file-selector-button { margin-right: 10px; padding: 7px 9px; border: 0; background: #d9f36a; color: #172016; cursor: pointer; font-size: 10px; font-weight: 700; }
 .upload-progress { display: flex; align-items: center; gap: 7px; margin: -3px 0 11px; color: #d9f36a; font-family: 'DM Mono', monospace; font-size: 9px; overflow-wrap: anywhere; }
+.uploaded-photo-list { display: grid; max-height: 220px; gap: 7px; overflow-y: auto; margin: 0 0 14px; padding: 9px; border: 1px solid rgba(217, 243, 106, .24); background: rgba(217, 243, 106, .035); }
+.uploaded-photo-list > p { margin: 0 0 2px; color: #aab4a8; font-family: 'DM Mono', monospace; font-size: 9px; }
+.uploaded-photo { display: grid; grid-template-columns: 38px minmax(0, 1fr) 18px; align-items: center; gap: 9px; min-width: 0; padding: 5px; border: 1px solid rgba(230, 238, 226, .1); color: #d9f36a; }
+.uploaded-photo img { display: block; width: 38px; height: 38px; object-fit: cover; background: #111713; }
+.uploaded-photo > span { display: grid; min-width: 0; gap: 4px; color: #e5e9df; }
+.uploaded-photo b, .uploaded-photo small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.uploaded-photo b { font-size: 10px; font-weight: 600; }
+.uploaded-photo small { color: #9aa697; font-size: 9px; }
+.uploaded-photo > svg { color: #d9f36a; }
+.photo-readiness { display: flex; align-items: flex-start; gap: 9px; margin-top: 10px; padding: 10px; border: 1px solid rgba(230, 238, 226, .16); color: #f08a69; }
+.photo-readiness.ready { border-color: rgba(217, 243, 106, .25); color: #d9f36a; }
+.photo-readiness > span { display: grid; gap: 4px; color: #e5e9df; }
+.photo-readiness b { font-size: 10px; }
+.photo-readiness small { color: #9aa697; font-size: 9px; line-height: 1.5; }
 .launch-section textarea { display: block; width: 100%; resize: vertical; padding: 9px 10px; border: 1px solid rgba(230, 238, 226, .18); border-radius: 0; background: #111713; color: #c6d0c2; font-family: 'DM Mono', monospace; font-size: 9px; line-height: 1.7; }
 .button-launch { margin-top: 15px; background: #f08a69; color: #201712; }
 .button-launch:hover:not(:disabled) { background: #ffac85; }
