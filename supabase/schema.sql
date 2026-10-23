@@ -24,7 +24,13 @@ create table if not exists public.groups (
 
 alter table public.groups drop column if exists team_code;
 alter table public.groups add column if not exists team_pin text;
+alter table public.groups add column if not exists member_count integer;
+alter table public.groups add column if not exists is_completed boolean;
 alter table public.groups add column if not exists is_flex_completed boolean not null default false;
+alter table public.groups add column if not exists phase2_question integer;
+alter table public.groups add column if not exists phase2_score integer;
+alter table public.groups add column if not exists phase2_complete boolean;
+alter table public.groups add column if not exists created_at timestamptz;
 
 do $$
 declare
@@ -41,6 +47,27 @@ begin
 end;
 $$;
 
+update public.groups set member_count = 0 where member_count is null;
+update public.groups set is_completed = false where is_completed is null;
+update public.groups set phase2_question = 0 where phase2_question is null;
+update public.groups set phase2_score = 0 where phase2_score is null;
+update public.groups set phase2_complete = false where phase2_complete is null;
+update public.groups set created_at = now() where created_at is null;
+alter table public.groups alter column member_count set default 0;
+alter table public.groups alter column member_count set not null;
+alter table public.groups alter column is_completed set default false;
+alter table public.groups alter column is_completed set not null;
+alter table public.groups alter column is_flex_completed set default false;
+alter table public.groups alter column is_flex_completed set not null;
+alter table public.groups alter column phase2_question set default 0;
+alter table public.groups alter column phase2_question set not null;
+alter table public.groups alter column phase2_score set default 0;
+alter table public.groups alter column phase2_score set not null;
+alter table public.groups alter column phase2_complete set default false;
+alter table public.groups alter column phase2_complete set not null;
+alter table public.groups alter column created_at set default now();
+alter table public.groups alter column created_at set not null;
+
 alter table public.groups alter column team_pin set not null;
 create unique index if not exists groups_team_pin_key on public.groups (team_pin);
 
@@ -55,7 +82,29 @@ create table if not exists public.players (
   created_at timestamptz not null default now()
 );
 
+alter table public.players add column if not exists access_token_hash text;
+update public.players
+set access_token_hash = md5(gen_random_uuid()::text)
+where access_token_hash is null;
+alter table public.players alter column access_token_hash set not null;
+
+alter table public.players add column if not exists tile_index integer;
+alter table public.players add column if not exists is_matched boolean;
+alter table public.players add column if not exists created_at timestamptz;
+update public.players set tile_index = 0 where tile_index is null;
+update public.players set is_matched = false where is_matched is null;
+update public.players set created_at = now() where created_at is null;
+alter table public.players alter column tile_index set default 0;
+alter table public.players alter column tile_index set not null;
+alter table public.players alter column is_matched set default false;
+alter table public.players alter column is_matched set not null;
+alter table public.players alter column created_at set default now();
+alter table public.players alter column created_at set not null;
+
 alter table public.players add column if not exists is_captain boolean not null default false;
+update public.players set is_captain = false where is_captain is null;
+alter table public.players alter column is_captain set default false;
+alter table public.players alter column is_captain set not null;
 
 create index if not exists players_group_id_idx on public.players (group_id);
 
