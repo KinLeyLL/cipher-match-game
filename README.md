@@ -17,7 +17,7 @@ A realtime team puzzle hunt for company events. Guests join a shared lobby, rece
 
 5. Start the app with `npm run dev`. The host dashboard displays a QR code for the player entry URL.
 
-The app accepts up to 90 players. The start function balances teams into groups of three to five, assigns each a photo and a 2x2 tile, and advances the event only after every player on a team checks in. Each group has one trivia captain so concurrent taps cannot skip questions. Captains share a four-digit team PIN; teammates enter it on their own screens.
+The app accepts up to 90 players. The start function balances teams into groups of three to five, assigns each a photo and a 2x2 tile, and advances the event only after every player on a team checks in. The first 10 teams to complete check-in earn 2 formation points; later teams earn 1. Each group has one trivia captain so concurrent taps cannot skip questions. Captains share a four-digit team PIN; teammates enter it on their own screens.
 
 ## Host event flow
 
@@ -25,11 +25,12 @@ The app accepts up to 90 players. The start function balances teams into groups 
 2. Show the QR code to guests. The player count rises as they join.
 3. Upload one unique photo per team, or keep the supplied sample photos. Each uploaded file appears below the picker with its compressed size and a ready check. Use its trash button to remove it from both Storage and the game photo list. The photo counter tells you how many teams can be started.
 4. When there are at least three players and enough photos, press **Start puzzle match** once. The game assigns teams and sends each player's tile.
-5. Watch **Team status**. Captains share the PIN shown to their team; if a team is stalled by a missing guest, use **Flex complete** for that team.
+5. Watch the live **Team rankings**. Formation points are awarded as teams finish check-in, and trivia points are added as captains answer. Captains share the PIN shown to their team; if a team is stalled by a missing guest, use **Flex complete** for that team.
 
 ## Supabase setup notes
 
 - Enable Email/Password under Authentication providers before creating a host account.
+- After updating the app, run the updated `schema.sql` in the Supabase SQL Editor before starting a new event so the formation-point counter and completion trigger are installed.
 - `schema.sql` enables row-level security, host-only roster access, player RPCs, authenticated host-only game start and flex-completion, a public 300 KB-limited `puzzle-images` bucket with host-only uploads and deletes, and Realtime publication for live updates.
 - Upload photos in the host dashboard to resize them and compress them below 280 KB before distribution. HTTPS URLs are also supported; use an image CDN that can serve optimized images.
 - The host dashboard lists each team's PIN and offers a confirmed **Flex complete** action to advance a team if someone is missing or can't check in. It preserves a checked-in captain or promotes a checked-in teammate if the original captain is absent.

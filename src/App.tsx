@@ -45,7 +45,8 @@ type Group = {
 
 type PlayerState = { player: Player; group: Group | null }
 type PlayerSession = { playerId: string; accessToken: string }
-type HostGroup = Pick<Group, 'id' | 'group_name' | 'team_pin' | 'member_count' | 'is_completed' | 'is_flex_completed' | 'phase2_complete'>
+type HostPlayer = Pick<Player, 'id' | 'player_name' | 'group_id' | 'is_matched' | 'is_captain'>
+type HostGroup = Pick<Group, 'id' | 'group_name' | 'team_pin' | 'member_count' | 'is_completed' | 'is_flex_completed' | 'phase2_question' | 'phase2_score' | 'phase2_complete'> & { formation_order: number | null; members: HostPlayer[] }
 type UploadedPhoto = { url: string; path: string; fileName: string; sizeBytes: number }
 type GameStatus = 'waiting' | 'active' | 'complete'
 
@@ -102,6 +103,11 @@ const TRIVIA_QUESTIONS = [
     answer: 0,
   },
 ]
+
+const formationPoints = (formationOrder: number | null) => {
+  if (formationOrder === null) return 0
+  return formationOrder <= 10 ? 2 : 1
+}
 
 const MAX_PHOTO_BYTES = 280 * 1024
 
@@ -188,18 +194,30 @@ export default function App() {
   const refreshHostDashboard = async () => {
     if (!supabase) return
     const [playersResult, groupsResult, statusResult] = await Promise.all([
-      supabase.from('players').select('id', { count: 'exact', head: true }),
+      supabase.from('players').select('id, player_name, group_id, is_matched, is_captain', { count: 'exact' }),
       supabase
         .from('groups')
-        .select('id, group_name, team_pin, member_count, is_completed, is_flex_completed, phase2_complete')
+        .select('id, group_name, team_pin, member_count, is_completed, is_flex_completed, formation_order, phase2_question, phase2_score, phase2_complete')
         .order('group_name'),
       supabase.from('game_settings').select('status').eq('id', 1).maybeSingle(),
     ])
 
     if (playersResult.error) setHostError(playersResult.error.message)
-    else setLobbyCount(playersResult.count ?? 0)
+    else setLobbyCount(playersResult.count ?? playersResult.data.length)
     if (groupsResult.error) setHostError(groupsResult.error.message)
-    else setHostGroups((groupsResult.data ?? []) as HostGroup[])
+    else {
+      const membersByGroup = new Map<string, HostPlayer[]>()
+      for (const player of (playersResult.data ?? []) as HostPlayer[]) {
+        if (!player.group_id) continue
+        const members = membersByGroup.get(player.group_id) ?? []
+        members.push(player)
+        membersByGroup.set(player.group_id, members)
+      }
+      setHostGroups((groupsResult.data ?? []).map((group) => ({
+        ...group,
+        members: membersByGroup.get(group.id) ?? [],
+      })) as HostGroup[])
+    }
     if (statusResult.error) setHostError(statusResult.error.message)
     else setGameStatus((statusResult.data?.status as GameStatus | undefined) ?? 'waiting')
   }
@@ -700,17 +718,45 @@ export default function App() {
                   </section>
                 </div>
                 <section className="host-section teams-section">
-                  <div className="section-heading"><div><span className="eyebrow">LIVE PROGRESS</span><h3>Team status</h3></div><span className="live-tag"><i /> LIVE</span></div>
+                  <div className="section-heading"><div><span className="eyebrow">LIVE LEADERBOARD</span><h3>Team rankings</h3></div><span className="live-tag"><i /> {gameStatus === 'complete' ? 'FINAL' : 'LIVE'}</span></div>
+                  <p className="leaderboard-note">Total points combine team formation and correct trivia answers. The first 10 teams formed earn 2 points; later teams earn 1. Questions completed break ties.</p>
                   {hostGroups.length === 0 ? <p className="empty-teams">Teams appear here as soon as the puzzle starts.</p> : (
                     <div className="team-status-list">
-                      {hostGroups.map((group) => (
+                      {[...hostGroups]
+                        .sort((left, right) => {
+                          const leftTotal = left.phase2_score + formationPoints(left.formation_order)
+                          const rightTotal = right.phase2_score + formationPoints(right.formation_order)
+                          return rightTotal - leftTotal || right.phase2_question - left.phase2_question || left.group_name.localeCompare(right.group_name)
+                        })
+                        .map((group, index) => (
                         <div className="team-status-row" key={group.id}>
-                          <span className="team-status-name">{group.group_name}<small>{group.member_count} players · PIN {group.team_pin ?? '----'}</small></span>
-                          <span className={group.is_completed ? 'team-state complete' : 'team-state'}>
-                            {group.is_flex_completed ? 'Flex complete' : group.is_completed ? <><CheckCircle2 size={14} /> Phase 2</> : 'Finding team'}
+                          <span className="leaderboard-rank" aria-label={`Rank ${index + 1}`}>{String(index + 1).padStart(2, '0')}</span>
+                          <span className="team-status-name">{group.group_name}<small>{group.member_count} players{group.formation_order ? ` · formed #${group.formation_order}` : ''} · PIN {group.team_pin ?? '----'}</small></span>
+                          <span className="leaderboard-score">
+                            <span><b>{group.phase2_score + formationPoints(group.formation_order)}</b><small> pts</small></span>
+                            <small>{formationPoints(group.formation_order)} form + {group.phase2_score} trivia</small>
                           </span>
-                          <span className="team-score">{group.phase2_complete ? 'Trivia done' : group.is_completed ? 'Playing' : 'Hunting'}</span>
+                          <span className={group.is_completed ? 'team-state complete' : 'team-state'}>
+                            {group.is_flex_completed ? 'Flex complete' : group.is_completed ? <><CheckCircle2 size={14} /> Team checked in</> : `${group.members.filter((member) => member.is_matched).length}/${group.member_count} checked in`}
+                          </span>
+                          <span className="team-score">{group.phase2_complete ? 'Trivia done' : group.phase2_question > 0 ? 'Trivia live' : group.is_completed ? 'Trivia ready' : 'Puzzle hunt'}</span>
                           {!group.is_completed && <button className="button button-flex" onClick={() => setFlexTarget(group)}>Flex complete</button>}
+                          <div className="team-progress-details">
+                            <div className="team-member-list" aria-label={`${group.members.filter((member) => member.is_matched).length} of ${group.member_count} teammates checked in`}>
+                              {group.members.map((member) => (
+                                <span className={`team-member ${member.is_matched ? 'checked-in' : ''}`} key={member.id}>
+                                  <i />{member.player_name}{member.is_captain ? ' · captain' : ''}
+                                </span>
+                              ))}
+                            </div>
+                            <div className="team-quiz-progress" aria-label={`Trivia: ${group.phase2_question} of 3 questions answered, ${group.phase2_score} correct`}>
+                              <span>TRIVIA</span>
+                              <b>{group.phase2_question}/3 answered · {group.phase2_score} correct</b>
+                              <div className="team-quiz-track" aria-hidden="true">
+                                {[0, 1, 2].map((question) => <i className={question < group.phase2_question ? 'answered' : ''} key={question} />)}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       ))}
                     </div>

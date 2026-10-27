@@ -1,6 +1,7 @@
 create table if not exists public.game_settings (
   id integer primary key check (id = 1),
   status text not null default 'waiting' check (status in ('waiting', 'active', 'complete')),
+  formation_count integer not null default 0,
   updated_at timestamptz not null default now()
 );
 
@@ -31,7 +32,9 @@ alter table public.groups add column if not exists is_flex_completed boolean not
 alter table public.groups add column if not exists phase2_question integer;
 alter table public.groups add column if not exists phase2_score integer;
 alter table public.groups add column if not exists phase2_complete boolean;
+alter table public.groups add column if not exists formation_order integer;
 alter table public.groups add column if not exists created_at timestamptz;
+alter table public.game_settings add column if not exists formation_count integer;
 
 do $$
 declare
@@ -53,6 +56,13 @@ update public.groups set is_completed = false where is_completed is null;
 update public.groups set phase2_question = 0 where phase2_question is null;
 update public.groups set phase2_score = 0 where phase2_score is null;
 update public.groups set phase2_complete = false where phase2_complete is null;
+update public.game_settings set formation_count = 0 where formation_count is null;
+update public.game_settings
+set formation_count = greatest(
+  formation_count,
+  coalesce((select max(formation_order) from public.groups), 0)
+)
+where id = 1;
 update public.groups set created_at = now() where created_at is null;
 alter table public.groups alter column member_count set default 0;
 alter table public.groups alter column member_count set not null;
@@ -66,11 +76,14 @@ alter table public.groups alter column phase2_score set default 0;
 alter table public.groups alter column phase2_score set not null;
 alter table public.groups alter column phase2_complete set default false;
 alter table public.groups alter column phase2_complete set not null;
+alter table public.game_settings alter column formation_count set default 0;
+alter table public.game_settings alter column formation_count set not null;
 alter table public.groups alter column created_at set default now();
 alter table public.groups alter column created_at set not null;
 
 alter table public.groups alter column team_pin set not null;
 create unique index if not exists groups_team_pin_key on public.groups (team_pin);
+create unique index if not exists groups_formation_order_key on public.groups (formation_order) where formation_order is not null;
 
 create table if not exists public.players (
   id uuid primary key default gen_random_uuid(),
@@ -175,6 +188,23 @@ begin
 end;
 $$;
 
+create or replace function public.record_team_formation()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.is_completed and not old.is_completed then
+    update public.game_settings
+    set formation_count = formation_count + 1
+    where id = 1
+    returning formation_count into new.formation_order;
+  end if;
+  return new;
+end;
+$$;
+
 drop trigger if exists players_publish_update on public.players;
 create trigger players_publish_update after insert or update on public.players
   for each row execute function public.publish_player_update();
@@ -182,6 +212,10 @@ create trigger players_publish_update after insert or update on public.players
 drop trigger if exists groups_publish_update on public.groups;
 create trigger groups_publish_update after insert or update on public.groups
   for each row execute function public.publish_group_update();
+
+drop trigger if exists groups_record_formation on public.groups;
+create trigger groups_record_formation before update of is_completed on public.groups
+  for each row execute function public.record_team_formation();
 
 alter table public.game_settings enable row level security;
 alter table public.groups enable row level security;
